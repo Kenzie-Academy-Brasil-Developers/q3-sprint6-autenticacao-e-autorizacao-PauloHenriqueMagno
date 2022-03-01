@@ -1,20 +1,22 @@
+from datetime import timedelta
 from flask import current_app, jsonify, request
 from app.models.user_model import UserModel
-import secrets
-from app.configs.auth import auth
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 
-@auth.login_required
+@jwt_required()
 def get_user():
-  user = auth.current_user()
+  user: UserModel = get_jwt_identity()
+
+  user = UserModel.query.filter_by(email = user["email"]).first()
 
   return jsonify(user), 200
 
 def create_user():
   data: dict = request.json
-  try:
 
-    user = UserModel(**data)
+  try:
+    user: UserModel = UserModel(**data)
 
     current_app.db.session.add(user)
     current_app.db.session.commit()
@@ -31,45 +33,44 @@ def create_user():
 def login_user():
   data: dict = request.json
   try:
-    user: UserModel = UserModel.query.filter_by(email = data["email"]).first()
+    user: UserModel = UserModel.query.filter_by(email = data.get("email")).first()
 
     if not user:
       raise ValueError("email and password mismatch")
 
-    if not user.check_password(data["password"]):
+    if not user.check_password(data.get("password")):
       raise ValueError("email and password mismatch")
 
-    token = secrets.token_hex(20)
+    token = create_access_token(user, expires_delta = timedelta(hours=5))
 
-    user.api_key = token
-
-    current_app.db.session.add(user)
-    current_app.db.session.commit()
-
-    return jsonify({"token": token}), 200
+    return jsonify({"access_token": token}), 200
 
   except ValueError as err:
     return jsonify({"msg": err.args[0]}), 400
 
-@auth.login_required
+@jwt_required()
 def delete_user():
-  user = auth.current_user()
+  user = get_jwt_identity()
+
+  user = UserModel.query.filter_by(email = user["email"]).first()
 
   current_app.db.session.delete(user)
   current_app.db.session.commit()
 
   return jsonify({
     "msg": f"User {user.name} has been deleted."
-  }), 204
+  }), 200
 
-@auth.login_required
+@jwt_required()
 def modify_user():
+  data = request.json
+  
   try:
-    data = request.json
+    user: UserModel = get_jwt_identity()
 
-    user: UserModel = auth.current_user()
+    user = UserModel.query.filter_by(email = user["email"]).first()
 
-    user.modify_user_data(user, data)
+    UserModel.modify_user_data(user, data)
 
     current_app.db.session.add(user)
     current_app.db.session.commit()

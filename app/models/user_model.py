@@ -12,7 +12,6 @@ class UserModel(db.Model):
   last_name: str = Column(String(511), nullable = False)
   email: str = Column(String(255), nullable = False, unique = True)
   password_hash = Column(String(511), nullable = False)
-  api_key = Column(String(511), nullable = True)
 
   @property
   def password(self):
